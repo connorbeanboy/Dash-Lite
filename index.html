@@ -97,7 +97,7 @@ let obstacles = [];
 let timer = 0;
 let distance = 0;
 let scrollSpeed = 6;
-let progressTimer = 0; // counts frames for progress increment
+let lastProgressTime = performance.now(); // track last 1% increment
 
 // -------------------
 // Menu setup
@@ -124,7 +124,7 @@ function startLevel(index) {
     obstacles = [];
     timer = 0;
     distance = 0;
-    progressTimer = 0;
+    lastProgressTime = performance.now();
 }
 
 // -------------------
@@ -177,11 +177,11 @@ function update() {
         player.vy = 0;
     }
 
-    // Increment progress 1% per second (assuming 60 FPS)
-    progressTimer++;
-    if (progressTimer >= 60) {
+    // Increment progress 1% per second using real time
+    const now = performance.now();
+    if (now - lastProgressTime >= 1000) { // 1000ms = 1 second
         distance += 1;
-        progressTimer = 0;
+        lastProgressTime = now;
     }
 
     // End level if distance reached
