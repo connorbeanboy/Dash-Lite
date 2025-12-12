@@ -97,6 +97,7 @@ let obstacles = [];
 let timer = 0;
 let distance = 0;
 let scrollSpeed = 6;
+let progressTimer = 0; // counts frames for progress increment
 
 // -------------------
 // Menu setup
@@ -123,6 +124,7 @@ function startLevel(index) {
     obstacles = [];
     timer = 0;
     distance = 0;
+    progressTimer = 0;
 }
 
 // -------------------
@@ -175,8 +177,14 @@ function update() {
         player.vy = 0;
     }
 
-    // Update distance
-    distance += scrollSpeed * 0.1;
+    // Increment progress 1% per second (assuming 60 FPS)
+    progressTimer++;
+    if (progressTimer >= 60) {
+        distance += 1;
+        progressTimer = 0;
+    }
+
+    // End level if distance reached
     if (distance >= levels[currentLevel].length) {
         returnToMenu();
     }
