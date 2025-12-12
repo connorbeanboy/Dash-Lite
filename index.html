@@ -153,9 +153,9 @@ function update() {
         player.vy = 0;
     }
 
-    // Progress: 1% per 10 seconds (10000 ms)
+    // Progress: 1% per 1 second (1000 ms)
     const now = performance.now();
-    if (now - lastProgressTime >= 10000) {
+    if (now - lastProgressTime >= 1000) {
         progressPercent += 1;
         lastProgressTime = now;
     }
