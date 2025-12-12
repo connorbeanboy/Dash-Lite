@@ -4,56 +4,56 @@
 <meta charset="UTF-8">
 <title>Dash Lite</title>
 <style>
-    body {
-        margin: 0;
-        overflow: hidden;
-        font-family: Arial, sans-serif;
-    }
-    canvas {
-        display: block;
-        margin: 0 auto;
-        background: #e6e6e6;
-    }
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+canvas {
+    display: block;
+    margin: 0 auto;
+    background: #e6e6e6;
+}
 
-    /* Menu styles */
-    #menu {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        z-index: 10;
-    }
-    #menu-background {
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, #6fc1fc, #ffffff);
-        z-index: 1;
-    }
-    #menu-content {
-        position: relative;
-        z-index: 2;
-        text-align: center;
-    }
-    #menu-content h1 {
-        font-size: 48px;
-        margin-bottom: 30px;
-    }
-    .level-btn {
-        display: block;
-        padding: 15px 30px;
-        margin: 10px auto;
-        background: black;
-        color: white;
-        font-size: 24px;
-        cursor: pointer;
-        border-radius: 10px;
-        width: 200px;
-    }
-    .level-btn:hover {
-        background: #555;
-    }
+/* Menu styles */
+#menu {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 10;
+}
+#menu-background {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #6fc1fc, #ffffff);
+    z-index: 1;
+}
+#menu-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+}
+#menu-content h1 {
+    font-size: 48px;
+    margin-bottom: 30px;
+}
+.level-btn {
+    display: block;
+    padding: 15px 30px;
+    margin: 10px auto;
+    background: black;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    border-radius: 10px;
+    width: 200px;
+}
+.level-btn:hover {
+    background: #555;
+}
 </style>
 </head>
 <body>
@@ -82,9 +82,9 @@ const levelButtonsDiv = document.getElementById("level-buttons");
 // Game & Level data
 // -------------------
 let levels = [
-    { name: "Level 1", length: 100, completion: 0 },
-    { name: "Level 2", length: 150, completion: 0 },
-    { name: "Level 3", length: 200, completion: 0 }
+    { name: "Level 1", completion: 0 },
+    { name: "Level 2", completion: 0 },
+    { name: "Level 3", completion: 0 }
 ];
 
 let currentLevel = null;
@@ -95,9 +95,9 @@ let currentLevel = null;
 let player = { x: 100, y: 300, size: 40, vy: 0, gravity: 0.6 };
 let obstacles = [];
 let timer = 0;
-let distance = 0;
+let progressPercent = 0; // exact % completed
+let lastProgressTime = 0; // real time tracker
 let scrollSpeed = 6;
-let lastProgressTime = performance.now(); // track last 1% increment
 
 // -------------------
 // Menu setup
@@ -117,13 +117,12 @@ buildMenu();
 function startLevel(index) {
     currentLevel = index;
     menu.style.display = "none";
-
     // Reset game state
     player.y = 300;
     player.vy = 0;
     obstacles = [];
     timer = 0;
-    distance = 0;
+    progressPercent = 0;
     lastProgressTime = performance.now();
 }
 
@@ -141,12 +140,7 @@ document.addEventListener("keydown", e => {
 // -------------------
 function spawnObstacle() {
     let h = Math.random() * 60 + 40;
-    obstacles.push({
-        x: canvas.width,
-        y: canvas.height - h,
-        w: 40,
-        h: h
-    });
+    obstacles.push({ x: canvas.width, y: canvas.height - h, w: 40, h: h });
 }
 
 // -------------------
@@ -154,8 +148,7 @@ function spawnObstacle() {
 // -------------------
 function returnToMenu() {
     let lvl = levels[currentLevel];
-    let pct = Math.floor((distance / lvl.length) * 100);
-    lvl.completion = Math.max(lvl.completion, pct);
+    lvl.completion = Math.max(lvl.completion, progressPercent);
     buildMenu();
     menu.style.display = "flex";
 }
@@ -170,22 +163,19 @@ function update() {
     // Gravity
     player.vy += player.gravity;
     player.y += player.vy;
-
-    // Floor collision
     if (player.y + player.size > canvas.height) {
         player.y = canvas.height - player.size;
         player.vy = 0;
     }
 
-    // Increment progress 1% per second using real time
+    // Increment progress by 1% per second
     const now = performance.now();
-    if (now - lastProgressTime >= 1000) { // 1000ms = 1 second
-        distance += 1;
+    if (now - lastProgressTime >= 1000) {
+        progressPercent += 1;
         lastProgressTime = now;
     }
 
-    // End level if distance reached
-    if (distance >= levels[currentLevel].length) {
+    if (progressPercent >= 100) {
         returnToMenu();
     }
 
@@ -199,8 +189,6 @@ function update() {
     // Move obstacles and check collisions
     obstacles.forEach((obs, i) => {
         obs.x -= scrollSpeed;
-
-        // Collision
         if (
             player.x < obs.x + obs.w &&
             player.x + player.size > obs.x &&
@@ -209,8 +197,6 @@ function update() {
         ) {
             returnToMenu();
         }
-
-        // Remove offscreen
         if (obs.x + obs.w < 0) obstacles.splice(i, 1);
     });
 }
@@ -218,7 +204,6 @@ function update() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Don't draw game if menu is visible
     if (menu.style.display !== "none") return;
 
     // Player
@@ -227,14 +212,12 @@ function draw() {
 
     // Obstacles
     ctx.fillStyle = "#000000";
-    obstacles.forEach(obs => {
-        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-    });
+    obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.w, obs.h));
 
     // Progress text
     ctx.fillStyle = "black";
-    let pct = Math.floor((distance / levels[currentLevel].length) * 100);
-    ctx.fillText(`Progress: ${pct}%`, 10, 20);
+    ctx.font = "20px Arial";
+    ctx.fillText(`Progress: ${progressPercent}%`, 10, 20);
 }
 
 // -------------------
