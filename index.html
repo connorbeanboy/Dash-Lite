@@ -12,7 +12,6 @@ body {
 canvas {
     display: block;
     margin: 0 auto;
-    background: #e6e6e6;
 }
 
 /* Menu styles */
@@ -58,7 +57,6 @@ canvas {
 </head>
 <body>
 
-<!-- Menu -->
 <div id="menu">
     <div id="menu-background"></div>
     <div id="menu-content">
@@ -67,46 +65,39 @@ canvas {
     </div>
 </div>
 
-<!-- Canvas -->
 <canvas id="gameCanvas" width="800" height="400"></canvas>
 
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Menu elements
+// Menu
 const menu = document.getElementById("menu");
 const levelButtonsDiv = document.getElementById("level-buttons");
 
-// -------------------
-// Game & Level data
-// -------------------
+// Levels with unique backgrounds
 let levels = [
-    { name: "Level 1", completion: 0 },
-    { name: "Level 2", completion: 0 },
-    { name: "Level 3", completion: 0 }
+    { name: "Level 1", completion: 0, bgColor: "#87CEEB" }, // sky blue
+    { name: "Level 2", completion: 0, bgColor: "#FFB6C1" }, // pink
+    { name: "Level 3", completion: 0, bgColor: "#90EE90" }  // light green
 ];
-
 let currentLevel = null;
 
-// -------------------
-// Player setup
-// -------------------
+// Player
 let player = { x: 100, y: 300, size: 40, vy: 0, gravity: 0.6 };
 let obstacles = [];
 let timer = 0;
-let progressPercent = 0; // exact % completed
-let lastProgressTime = 0; // real time tracker
+let progressPercent = 0;
+let lastProgressTime = 0;
 let scrollSpeed = 6;
+let currentBg = "#e6e6e6"; // default background
 
-// -------------------
-// Menu setup
-// -------------------
+// Build menu
 function buildMenu() {
     levelButtonsDiv.innerHTML = "";
     levels.forEach((lvl, i) => {
         const btn = document.createElement("div");
-        btn.classList.add("level-btn");
+        btn.className = "level-btn";
         btn.textContent = `${lvl.name} — ${lvl.completion}%`;
         btn.onclick = () => startLevel(i);
         levelButtonsDiv.appendChild(btn);
@@ -114,50 +105,44 @@ function buildMenu() {
 }
 buildMenu();
 
+// Start level
 function startLevel(index) {
     currentLevel = index;
     menu.style.display = "none";
-    // Reset game state
     player.y = 300;
     player.vy = 0;
     obstacles = [];
     timer = 0;
     progressPercent = 0;
     lastProgressTime = performance.now();
+    currentBg = levels[index].bgColor;
 }
 
-// -------------------
 // Input
-// -------------------
 document.addEventListener("keydown", e => {
     if (e.code === "Space" && player.y >= 300) {
         player.vy = -12;
     }
 });
 
-// -------------------
-// Spawn obstacles
-// -------------------
+// Obstacles
 function spawnObstacle() {
     let h = Math.random() * 60 + 40;
     obstacles.push({ x: canvas.width, y: canvas.height - h, w: 40, h: h });
 }
 
-// -------------------
 // Return to menu
-// -------------------
 function returnToMenu() {
-    let lvl = levels[currentLevel];
-    lvl.completion = Math.max(lvl.completion, progressPercent);
+    if (currentLevel !== null) {
+        levels[currentLevel].completion = Math.max(levels[currentLevel].completion, progressPercent);
+    }
     buildMenu();
     menu.style.display = "flex";
+    currentBg = "#e6e6e6";
 }
 
-// -------------------
-// Game loop functions
-// -------------------
+// Game loop
 function update() {
-    // Do nothing if menu is visible
     if (menu.style.display !== "none") return;
 
     // Gravity
@@ -168,33 +153,28 @@ function update() {
         player.vy = 0;
     }
 
-    // Increment progress by 1% per second
+    // Progress: 1% per 10 seconds (10000 ms)
     const now = performance.now();
-    if (now - lastProgressTime >= 1000) {
+    if (now - lastProgressTime >= 10000) {
         progressPercent += 1;
         lastProgressTime = now;
     }
+    if (progressPercent >= 100) returnToMenu();
 
-    if (progressPercent >= 100) {
-        returnToMenu();
-    }
-
-    // Spawn obstacles periodically
+    // Spawn obstacles every 90 frames
     timer++;
     if (timer >= 90) {
         spawnObstacle();
         timer = 0;
     }
 
-    // Move obstacles and check collisions
+    // Move obstacles & check collision
     obstacles.forEach((obs, i) => {
         obs.x -= scrollSpeed;
-        if (
-            player.x < obs.x + obs.w &&
+        if (player.x < obs.x + obs.w &&
             player.x + player.size > obs.x &&
             player.y < obs.y + obs.h &&
-            player.y + player.size > obs.y
-        ) {
+            player.y + player.size > obs.y) {
             returnToMenu();
         }
         if (obs.x + obs.w < 0) obstacles.splice(i, 1);
@@ -202,7 +182,9 @@ function update() {
 }
 
 function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Draw background
+    ctx.fillStyle = currentBg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (menu.style.display !== "none") return;
 
@@ -214,15 +196,13 @@ function draw() {
     ctx.fillStyle = "#000000";
     obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.w, obs.h));
 
-    // Progress text
+    // Progress
     ctx.fillStyle = "black";
     ctx.font = "20px Arial";
     ctx.fillText(`Progress: ${progressPercent}%`, 10, 20);
 }
 
-// -------------------
 // Main loop
-// -------------------
 function loop() {
     update();
     draw();
