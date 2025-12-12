@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dash Lite</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            background: #e6e6e6;
+            display: block;
+            margin: 0 auto;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+<div id="score">Score: 0</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let player = {
+    x: 100,
+    y: 300,
+    size: 40,
+    vy: 0,
+    gravity: 0.6,
+    jumpForce: -12,
+    grounded: false
+};
+
+let obstacles = [];
+let spawnTimer = 0;
+let spawnInterval = 90;
+let scrollSpeed = 6;
+let score = 0;
+
+function spawnObstacle() {
+    let height = Math.floor(Math.random() * 60) + 40;
+    obstacles.push({
+        x: canvas.width,
+        y: canvas.height - height,
+        width: 40,
+        height: height
+    });
+}
+
+function resetGame() {
+    obstacles = [];
+    player.y = 300;
+    player.vy = 0;
+    score = 0;
+}
+
+document.addEventListener("keydown", e => {
+    if (e.code === "Space" && player.grounded) {
+        player.vy = player.jumpForce;
+    }
+});
+
+function update() {
+    // Gravity
+    player.vy += player.gravity;
+    player.y += player.vy;
+
+    // Floor
+    if (player.y + player.size >= canvas.height) {
+        player.y = canvas.height - player.size;
+        player.vy = 0;
+        player.grounded = true;
+    } else {
+        player.grounded = false;
+    }
+
+    // Spawn obstacles
+    spawnTimer++;
+    if (spawnTimer >= spawnInterval) {
+        spawnObstacle();
+        spawnTimer = 0;
+    }
+
+    // Update obstacles
+    obstacles.forEach((obs, i) => {
+        obs.x -= scrollSpeed;
+
+        // Collision
+        if (
+            player.x < obs.x + obs.width &&
+            player.x + player.size > obs.x &&
+            player.y < obs.y + obs.height &&
+            player.y + player.size > obs.y
+        ) {
+            resetGame();
+        }
+
+        // Remove off-screen
+        if (obs.x + obs.width < 0) {
+            obstacles.splice(i, 1);
+            score++;
+        }
+    });
+
+    document.getElementById("score").textContent = "Score: " + score;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Player
+    ctx.fillStyle = "#ff5050";
+    ctx.fillRect(player.x, player.y, player.size, player.size);
+
+    // Obstacles
+    ctx.fillStyle = "#000000";
+    obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    });
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>
