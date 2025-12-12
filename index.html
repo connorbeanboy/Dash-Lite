@@ -9,6 +9,7 @@
             overflow: hidden;
             background: #ffffff;
             font-family: Arial, sans-serif;
+            user-select: none;
         }
         #gameCanvas {
             background: #e6e6e6;
@@ -22,17 +23,70 @@
             font-size: 24px;
             font-weight: bold;
         }
+
+        /* Title screen UI */
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .levelBtn {
+            padding: 15px 30px;
+            margin: 10px;
+            background: black;
+            color: white;
+            font-size: 22px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+        .levelBtn:hover {
+            background: #555;
+        }
+        #title {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
 
+<div id="menu">
+    <div id="title">Dash Lite</div>
+    <div id="levelButtons"></div>
+</div>
+
 <canvas id="gameCanvas" width="800" height="400"></canvas>
-<div id="score">Score: 0</div>
+<div id="score" style="display: none;">Score: 0</div>
 
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
+const menu = document.getElementById("menu");
+const levelButtonsDiv = document.getElementById("levelButtons");
+const scoreUI = document.getElementById("score");
+
+// ----------------------
+// LEVEL DATA
+// ----------------------
+let levels = [
+    { name: "Level 1", difficulty: "Easy", length: 100, completion: 0 },
+    { name: "Level 2", difficulty: "Medium", length: 140, completion: 0 },
+    { name: "Level 3", difficulty: "Hard", length: 180, completion: 0 }
+];
+
+let currentLevel = null;
+
+// ----------------------
+// PLAYER
+// ----------------------
 let player = {
     x: 100,
     y: 300,
@@ -44,13 +98,54 @@ let player = {
 };
 
 let obstacles = [];
-let spawnTimer = 0;
-let spawnInterval = 90;
+let timer = 0;
 let scrollSpeed = 6;
 let score = 0;
+let maxDistance = 0;
+let distance = 0;
 
+// ----------------------
+// BUILD LEVEL BUTTONS
+// ----------------------
+function buildLevelMenu() {
+    levelButtonsDiv.innerHTML = "";
+    levels.forEach((lvl, i) => {
+        const btn = document.createElement("div");
+        btn.classList.add("levelBtn");
+        btn.textContent = `${lvl.name} — ${lvl.completion}%`;
+        btn.onclick = () => startLevel(i);
+        levelButtonsDiv.appendChild(btn);
+    });
+}
+
+buildLevelMenu();
+
+// ----------------------
+// LEVEL START
+// ----------------------
+function startLevel(id) {
+    currentLevel = id;
+
+    // Reset game
+    obstacles = [];
+    player.y = 300;
+    player.vy = 0;
+    timer = 0;
+    score = 0;
+    distance = 0;
+    maxDistance = levels[id].length;
+
+    // Hide menu, show game
+    menu.style.display = "none";
+    scoreUI.style.display = "block";
+}
+
+// ----------------------
+// SPAWN OBSTACLES
+// ----------------------
 function spawnObstacle() {
     let height = Math.floor(Math.random() * 60) + 40;
+
     obstacles.push({
         x: canvas.width,
         y: canvas.height - height,
@@ -59,20 +154,35 @@ function spawnObstacle() {
     });
 }
 
-function resetGame() {
-    obstacles = [];
-    player.y = 300;
-    player.vy = 0;
-    score = 0;
+// ----------------------
+// RESET TO MENU
+// ----------------------
+function returnToMenu() {
+    // Update completion
+    let percent = Math.floor((distance / maxDistance) * 100);
+    levels[currentLevel].completion = Math.max(levels[currentLevel].completion, percent);
+
+    buildLevelMenu();
+    menu.style.display = "flex";
+    scoreUI.style.display = "none";
 }
 
+// ----------------------
+// GAME INPUT
+// ----------------------
 document.addEventListener("keydown", e => {
     if (e.code === "Space" && player.grounded) {
         player.vy = player.jumpForce;
     }
 });
 
+// ----------------------
+// GAME LOOP
+// ----------------------
 function update() {
+    // Only run if a level is active
+    if (menu.style.display !== "none") return;
+
     // Gravity
     player.vy += player.gravity;
     player.y += player.vy;
@@ -86,11 +196,17 @@ function update() {
         player.grounded = false;
     }
 
+    // Distance & completion tracking
+    distance += scrollSpeed * 0.1;
+    if (distance >= maxDistance) {
+        returnToMenu(); // Level finished
+    }
+
     // Spawn obstacles
-    spawnTimer++;
-    if (spawnTimer >= spawnInterval) {
+    timer++;
+    if (timer >= 90) {
         spawnObstacle();
-        spawnTimer = 0;
+        timer = 0;
     }
 
     // Update obstacles
@@ -104,21 +220,20 @@ function update() {
             player.y < obs.y + obs.height &&
             player.y + player.size > obs.y
         ) {
-            resetGame();
+            returnToMenu();
         }
 
-        // Remove off-screen
-        if (obs.x + obs.width < 0) {
-            obstacles.splice(i, 1);
-            score++;
-        }
+        if (obs.x + obs.width < 0) obstacles.splice(i, 1);
     });
 
-    document.getElementById("score").textContent = "Score: " + score;
+    scoreUI.textContent = `Progress: ${Math.floor((distance/maxDistance)*100)}%`;
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Only draw gameplay if active
+    if (menu.style.display !== "none") return;
 
     // Player
     ctx.fillStyle = "#ff5050";
@@ -126,18 +241,16 @@ function draw() {
 
     // Obstacles
     ctx.fillStyle = "#000000";
-    obstacles.forEach(obs => {
-        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-    });
+    obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.width, obs.height));
 }
 
-function gameLoop() {
+function loop() {
     update();
     draw();
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(loop);
 }
 
-gameLoop();
+loop();
 </script>
 
 </body>
