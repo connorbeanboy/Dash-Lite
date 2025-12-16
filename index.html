@@ -1,208 +1,215 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Dash Lite</title>
-<style>
-body {
-    margin: 0;
-    overflow: hidden;
-    font-family: Arial, sans-serif;
-}
-canvas {
-    display: block;
-    margin: 0 auto;
-}
-
-/* Menu styles */
-#menu {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    z-index: 10;
-}
-#menu-background {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, #6fc1fc, #ffffff);
-    z-index: 1;
-}
-#menu-content {
-    position: relative;
-    z-index: 2;
-    text-align: center;
-}
-#menu-content h1 {
-    font-size: 48px;
-    margin-bottom: 30px;
-}
-.level-btn {
-    display: block;
-    padding: 15px 30px;
-    margin: 10px auto;
-    background: black;
-    color: white;
-    font-size: 24px;
-    cursor: pointer;
-    border-radius: 10px;
-    width: 200px;
-}
-.level-btn:hover {
-    background: #555;
-}
-</style>
-</head>
-<body>
-
-<div id="menu">
-    <div id="menu-background"></div>
-    <div id="menu-content">
-        <h1>Dash Lite</h1>
-        <div id="level-buttons"></div>
-    </div>
-</div>
-
-<canvas id="gameCanvas" width="800" height="400"></canvas>
-
 <script>
+/* =========================================================
+   DASH LITE — GEOMETRY DASH STYLE ENGINE
+   Single-file foundation engine
+   ========================================================= */
+
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Menu
-const menu = document.getElementById("menu");
-const levelButtonsDiv = document.getElementById("level-buttons");
+// ================== AUDIO ==================
+const sounds = {
+    jump: new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"),
+    death: new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"),
+    portal: new Audio("https://actions.google.com/sounds/v1/cartoon/pop.ogg")
+};
 
-// Levels with unique backgrounds
-let levels = [
-    { name: "Level 1", completion: 0, bgColor: "#87CEEB" }, // sky blue
-    { name: "Level 2", completion: 0, bgColor: "#FFB6C1" }, // pink
-    { name: "Level 3", completion: 0, bgColor: "#90EE90" }  // light green
-];
-let currentLevel = null;
-
-// Player
-let player = { x: 100, y: 300, size: 40, vy: 0, gravity: 0.6 };
-let obstacles = [];
-let timer = 0;
-let progressPercent = 0;
-let lastProgressTime = 0;
+// ================== GAME STATE ==================
+let mode = "menu"; // menu | play | editor
+let gameMode = "cube"; // cube ship ufo wave
+let holding = false;
 let scrollSpeed = 6;
-let currentBg = "#e6e6e6"; // default background
+let gravity = 0.7;
 
-// Build menu
-function buildMenu() {
-    levelButtonsDiv.innerHTML = "";
-    levels.forEach((lvl, i) => {
-        const btn = document.createElement("div");
-        btn.className = "level-btn";
-        btn.textContent = `${lvl.name} — ${lvl.completion}%`;
-        btn.onclick = () => startLevel(i);
-        levelButtonsDiv.appendChild(btn);
-    });
-}
-buildMenu();
+// ================== PLAYER ==================
+const player = {
+    x: 120,
+    y: 300,
+    size: 36,
+    vy: 0,
+    waveDir: -1
+};
 
-// Start level
-function startLevel(index) {
-    currentLevel = index;
-    menu.style.display = "none";
-    player.y = 300;
-    player.vy = 0;
-    obstacles = [];
-    timer = 0;
-    progressPercent = 0;
-    lastProgressTime = performance.now();
-    currentBg = levels[index].bgColor;
-}
+// ================== LEVEL DATA ==================
+let levelObjects = [];
+let editorSelection = "spike";
 
-// Input
+// ================== INPUT ==================
 document.addEventListener("keydown", e => {
-    if (e.code === "Space" && player.y >= 300) {
-        player.vy = -12;
+    if (e.code === "Space") holding = true;
+
+    if (mode === "editor") {
+        if (e.key === "1") editorSelection = "spike";
+        if (e.key === "2") editorSelection = "block";
+        if (e.key === "3") editorSelection = "cube";
+        if (e.key === "4") editorSelection = "ship";
+        if (e.key === "5") editorSelection = "ufo";
+        if (e.key === "6") editorSelection = "wave";
+        if (e.key === "s") saveLevel();
+        if (e.key === "l") loadLevel();
+        if (e.key === "p") startPlay();
     }
+
+    if (e.key === "Escape") mode = "menu";
 });
 
-// Obstacles
-function spawnObstacle() {
-    let h = Math.random() * 60 + 40;
-    obstacles.push({ x: canvas.width, y: canvas.height - h, w: 40, h: h });
+document.addEventListener("keyup", e => {
+    if (e.code === "Space") holding = false;
+});
+
+canvas.addEventListener("mousedown", e => {
+    if (mode !== "editor") return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    levelObjects.push({
+        type: editorSelection,
+        x: Math.floor(x / 40) * 40,
+        y: Math.floor(y / 40) * 40
+    });
+});
+
+// ================== SAVE / LOAD ==================
+function saveLevel() {
+    localStorage.setItem("dashLiteLevel", JSON.stringify(levelObjects));
 }
 
-// Return to menu
-function returnToMenu() {
-    if (currentLevel !== null) {
-        levels[currentLevel].completion = Math.max(levels[currentLevel].completion, progressPercent);
-    }
-    buildMenu();
-    menu.style.display = "flex";
-    currentBg = "#e6e6e6";
+function loadLevel() {
+    const data = localStorage.getItem("dashLiteLevel");
+    if (data) levelObjects = JSON.parse(data);
 }
 
-// Game loop
+// ================== MODE SWITCH ==================
+function setMode(m) {
+    gameMode = m;
+    sounds.portal.currentTime = 0;
+    sounds.portal.play();
+}
+
+// ================== PLAY START ==================
+function startPlay() {
+    mode = "play";
+    player.y = 300;
+    player.vy = 0;
+    gameMode = "cube";
+}
+
+// ================== COLLISION ==================
+function hit(a, b, w = 40, h = 40) {
+    return (
+        a.x < b.x + w &&
+        a.x + a.size > b.x &&
+        a.y < b.y + h &&
+        a.y + a.size > b.y
+    );
+}
+
+// ================== UPDATE ==================
 function update() {
-    if (menu.style.display !== "none") return;
+    if (mode !== "play") return;
 
-    // Gravity
-    player.vy += player.gravity;
-    player.y += player.vy;
-    if (player.y + player.size > canvas.height) {
-        player.y = canvas.height - player.size;
-        player.vy = 0;
-    }
-
-    // Progress: 1% per 1 second (1000 ms)
-    const now = performance.now();
-    if (now - lastProgressTime >= 1000) {
-        progressPercent += 1;
-        lastProgressTime = now;
-    }
-    if (progressPercent >= 100) returnToMenu();
-
-    // Spawn obstacles every 90 frames
-    timer++;
-    if (timer >= 90) {
-        spawnObstacle();
-        timer = 0;
-    }
-
-    // Move obstacles & check collision
-    obstacles.forEach((obs, i) => {
-        obs.x -= scrollSpeed;
-        if (player.x < obs.x + obs.w &&
-            player.x + player.size > obs.x &&
-            player.y < obs.y + obs.h &&
-            player.y + player.size > obs.y) {
-            returnToMenu();
+    // PHYSICS
+    if (gameMode === "cube") {
+        player.vy += gravity;
+        if (holding && player.y >= 300) {
+            player.vy = -13;
+            sounds.jump.play();
         }
-        if (obs.x + obs.w < 0) obstacles.splice(i, 1);
+    }
+
+    if (gameMode === "ship") {
+        player.vy += holding ? -0.8 : 0.8;
+        player.vy = Math.max(Math.min(player.vy, 7), -7);
+    }
+
+    if (gameMode === "ufo") {
+        player.vy += gravity * 0.8;
+        if (holding) {
+            player.vy = -11;
+            holding = false;
+            sounds.jump.play();
+        }
+    }
+
+    if (gameMode === "wave") {
+        if (holding) player.waveDir = -1;
+        else player.waveDir = 1;
+        player.y += player.waveDir * 8;
+    }
+
+    player.y += player.vy;
+
+    // FLOOR
+    if (player.y + player.size > canvas.height) die();
+    if (player.y < 0) die();
+
+    // OBJECTS
+    levelObjects.forEach(o => {
+        o.x -= scrollSpeed;
+
+        if (o.type === "spike" && hit(player, o)) die();
+        if (o.type === "block" && hit(player, o)) die();
+
+        if (["cube","ship","ufo","wave"].includes(o.type) && hit(player, o)) {
+            setMode(o.type);
+        }
     });
 }
 
-function draw() {
-    // Draw background
-    ctx.fillStyle = currentBg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (menu.style.display !== "none") return;
-
-    // Player
-    ctx.fillStyle = "#ff5050";
-    ctx.fillRect(player.x, player.y, player.size, player.size);
-
-    // Obstacles
-    ctx.fillStyle = "#000000";
-    obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.w, obs.h));
-
-    // Progress
-    ctx.fillStyle = "black";
-    ctx.font = "20px Arial";
-    ctx.fillText(`Progress: ${progressPercent}%`, 10, 20);
+// ================== DIE ==================
+function die() {
+    sounds.death.play();
+    startPlay();
 }
 
-// Main loop
+// ================== DRAW ==================
+function draw() {
+    ctx.fillStyle = "#e6e6e6";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (mode === "menu") {
+        ctx.fillStyle = "#000";
+        ctx.font = "40px Arial";
+        ctx.fillText("Dash Lite", 300, 180);
+        ctx.font = "20px Arial";
+        ctx.fillText("Press P to Play | E to Edit", 270, 220);
+        return;
+    }
+
+    // PLAYER ICONS
+    ctx.fillStyle =
+        gameMode === "cube" ? "#ff5555" :
+        gameMode === "ship" ? "#55ff55" :
+        gameMode === "ufo" ? "#5555ff" :
+        "#aa55ff";
+
+    ctx.fillRect(player.x, player.y, player.size, player.size);
+
+    // OBJECTS
+    levelObjects.forEach(o => {
+        if (o.type === "spike") {
+            ctx.fillStyle = "#000";
+            ctx.beginPath();
+            ctx.moveTo(o.x, o.y + 40);
+            ctx.lineTo(o.x + 20, o.y);
+            ctx.lineTo(o.x + 40, o.y + 40);
+            ctx.fill();
+        } else if (o.type === "block") {
+            ctx.fillStyle = "#333";
+            ctx.fillRect(o.x, o.y, 40, 40);
+        } else {
+            ctx.fillStyle = "#00f";
+            ctx.fillRect(o.x, o.y, 40, 40);
+        }
+    });
+
+    // UI
+    ctx.fillStyle = "#000";
+    ctx.fillText(`MODE: ${gameMode.toUpperCase()}`, 10, 20);
+}
+
+// ================== LOOP ==================
 function loop() {
     update();
     draw();
@@ -210,6 +217,3 @@ function loop() {
 }
 loop();
 </script>
-
-</body>
-</html>
